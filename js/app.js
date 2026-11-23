@@ -1,13 +1,18 @@
 import { Engine, PRESETS } from './engine.js';
 import { Visuals } from './visuals.js';
+import { DrumMachine } from './drums.js';
 
 const engine = new Engine();
 const canvas = document.getElementById('stage');
 const visuals = new Visuals(canvas, engine);
+const drums = new DrumMachine(engine);
+visuals.drums = drums;
 const startEl = document.getElementById('start');
 const presetsEl = document.getElementById('presets');
 const modeBtn = document.getElementById('mode');
 const hintEl = document.getElementById('hint');
+const beatBtn = document.getElementById('beat');
+const tempoBtn = document.getElementById('tempo');
 
 // ---- gespeicherte Einstellungen (nur Komfort, darf fehlen) ----
 const store = {
@@ -41,7 +46,29 @@ function selectPreset(id) {
   presetsEl.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.id === id));
   hintEl.textContent = PRESETS[id].hint;
   store.set('preset', id);
+  // Beat gibt es (vorerst) nur bei Robotik
+  const hasBeat = id === 'robotik';
+  beatBtn.hidden = tempoBtn.hidden = !hasBeat;
+  if (!hasBeat) setBeat(false);
 }
+
+// ---- Beat (Robotik) ----
+function setBeat(on) {
+  if (on) drums.start();
+  else drums.stop();
+  beatBtn.setAttribute('aria-pressed', drums.running);
+  beatBtn.textContent = drums.running ? 'Beat ■' : 'Beat ▶';
+}
+beatBtn.addEventListener('click', () => setBeat(!drums.running));
+
+const TEMPI = [100, 116, 132];
+function setTempo(bpm) {
+  drums.bpm = bpm;
+  tempoBtn.textContent = bpm + ' BPM';
+  store.set('bpm', bpm);
+}
+tempoBtn.addEventListener('click', () => setTempo(TEMPI[(TEMPI.indexOf(drums.bpm) + 1) % TEMPI.length]));
+setTempo(TEMPI.includes(+store.get('bpm')) ? +store.get('bpm') : 116);
 
 // ---- Frei / Tonleiter ----
 function setQuantize(q) {
@@ -101,6 +128,7 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
     engine.releaseAll();
     visuals.touches.clear();
+    setBeat(false); // im Hintergrund drosselt der Browser die Zeitsteuerung
   }
 });
 
@@ -110,4 +138,4 @@ if ('serviceWorker' in navigator && location.protocol !== 'file:') {
 }
 
 // Zugriff für Fehlersuche in der Browser-Konsole
-window.klang = { engine, visuals };
+window.klang = { engine, visuals, drums };

@@ -19,6 +19,13 @@ Man spielt mit den Fingern auf einer Fläche, und jeder Klang hat seinen eigenen
 | Industrial | Rammstein | Verzerrter Power-Chord (Grundton, Quinte, Unteroktave) | Rot-schwarz, Funken, Erschütterung |
 | Lo-Fi Dub | Gorillaz | Leiernder Vintage-Klang, Dub-Echo, Bandrauschen | Filmkorn, VHS-Farbversatz, Echo-Ringe |
 
+### Beat (nur Robotik)
+
+Ein Drumcomputer, der sich laufend verändert: Pro Takt wird ein Teil der Schläge neu ausgewürfelt,
+die Dichte wandert langsam, alle 8 Takte gibt es ein Fill und gelegentlich einen Breakdown.
+Kick auf 1 und 3 sowie Snare auf 2 und 4 bleiben als Gerüst immer stehen.
+Tempo umschaltbar: 100, 116 oder 132 BPM. Die Leiste unten zeigt die 16 Schritte.
+
 Alle Klänge werden live mit der Web Audio API erzeugt. Es gibt keine Samples und damit keine Lizenzfragen.
 
 ## Lokal starten
@@ -40,6 +47,7 @@ Hinweis: Die Installation als App (PWA) und der Offline-Modus funktionieren nur 
 ## Aufbau
 
 - `js/engine.js` – Klangmaschine und die vier Klangfarben
+- `js/drums.js` – generativer Drumcomputer (Robotik)
 - `js/visuals.js` – Visualisierung, ein Theme pro Klangfarbe
 - `js/app.js` – Bedienung, Multitouch, Einstellungen
 - `sw.js` – Offline-Cache (bei Änderungen `VERSION` erhöhen)

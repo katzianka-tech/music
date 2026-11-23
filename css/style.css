@@ -81,7 +81,9 @@ html, body {
   border-color: var(--accent);
   color: #000;
 }
-#mode { flex: none; padding: 6px 14px; font-size: 12px; }
+#mode, #beat, #tempo { flex: none; padding: 6px 12px; font-size: 12px; }
+#bar button[hidden] { display: none; }
+#hint { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #mode[aria-pressed='false'] { background: var(--chip-bg); color: var(--fg); border-color: var(--accent); }
 
 #hint {

@@ -149,6 +149,45 @@ function wavePath(v, { yMid, amp, step = 4, shape = (s) => s, stepped = false })
   }
 }
 
+// Lauflicht-Leiste des Drumcomputers: 16 Schritte, Kick rot, Snare weiss, Rest cyan
+function drawSteps(v, beat) {
+  const g = v.g;
+  const n = beat.pattern.kick.length;
+  const pad = 12;
+  const cw = (v.w - pad * 2) / n;
+  const y = v.h - 64;
+  for (let s = 0; s < n; s++) {
+    const x = pad + s * cw;
+    const cur = s === beat.step;
+    g.strokeStyle = cur ? '#ffffff' : s % 4 === 0 ? 'rgba(127,240,255,0.55)' : 'rgba(127,240,255,0.25)';
+    g.lineWidth = cur ? 2 : 1;
+    g.strokeRect(x + 2, y, cw - 4, 22);
+    if (beat.breakdown) {
+      if (beat.pattern.hat[s]) {
+        g.fillStyle = 'rgba(127,240,255,0.5)';
+        g.fillRect(x + 4, y + 15, cw - 8, 4);
+      }
+    } else {
+      if (beat.pattern.kick[s]) {
+        g.fillStyle = cur ? '#ff3b6b' : 'rgba(255,59,107,0.6)';
+        g.fillRect(x + 4, y + 3, cw - 8, 5);
+      }
+      if (beat.pattern.snare[s]) {
+        g.fillStyle = cur ? '#ffffff' : 'rgba(255,255,255,0.55)';
+        g.fillRect(x + 4, y + 9, cw - 8, 5);
+      }
+      if (beat.pattern.hat[s] || beat.pattern.clave[s] || beat.pattern.zap[s]) {
+        g.fillStyle = cur ? '#7ff0ff' : 'rgba(127,240,255,0.45)';
+        g.fillRect(x + 4, y + 15, cw - 8, 4);
+      }
+    }
+    if (cur) {
+      g.fillStyle = 'rgba(255,255,255,0.12)';
+      g.fillRect(x + 2, y, cw - 4, 22);
+    }
+  }
+}
+
 const THEMES = {
   // Kraftwerk-artig: kühl, präzise, geometrisch
   robotik: {
@@ -156,8 +195,10 @@ const THEMES = {
       const g = v.g;
       g.fillStyle = '#04060c';
       g.fillRect(0, 0, v.w, v.h);
-      // Raster
-      g.strokeStyle = `rgba(80,220,255,${0.05 + lvl * 0.12})`;
+      const beat = v.drums?.running ? v.drums.state() : null;
+      const pulse = beat ? Math.exp(-beat.kickAge * 9) : 0;
+      // Raster (pulsiert mit der Kick)
+      g.strokeStyle = `rgba(80,220,255,${0.05 + lvl * 0.12 + pulse * 0.3})`;
       g.lineWidth = 1;
       const s = 32;
       g.beginPath();
@@ -171,6 +212,7 @@ const THEMES = {
       }
       g.stroke();
       v.guides('rgba(80,220,255,0.18)', 'rgba(150,235,255,0.6)', '12px ui-monospace, monospace');
+      if (beat) drawSteps(v, beat);
       // digitale, gestufte Wellenform
       g.strokeStyle = '#7ff0ff';
       g.lineWidth = 2;
