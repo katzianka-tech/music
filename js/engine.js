@@ -1,7 +1,7 @@
 // Klangmaschine: vier synthetische Klangfarben, gesteuert über Position (x = Tonhöhe, y = Klangfarbe).
 // Alles wird live mit der Web Audio API erzeugt, es gibt keine Samples.
 
-import { chordGrid } from './harmony.js';
+import { DEGREES, degreeFor, degreeIndex, complexityFor, voiceChord } from './harmony.js';
 
 // ---------- Tonhöhe ----------
 
@@ -153,7 +153,7 @@ export const PRESETS = {
       d.connect(fb).connect(d);
       return { input, dispose() {} };
     },
-    voice(ctx, bus, freq, y) {
+    voice(ctx, bus, freq, y, level = 1) {
       const saw = osc(ctx, 'sawtooth', freq);
       const sq = osc(ctx, 'square', freq / 2);
       const src = ctx.createGain();
@@ -175,7 +175,7 @@ export const PRESETS = {
       return voice(ctx, {
         oscs: [{ node: saw, ratio: 1 }, { node: sq, ratio: 0.5 }],
         amp,
-        peak: 0.55,
+        peak: 0.55 * level,
         attack: 0.008,
         release: 0.12,
         setY(y, t) {
@@ -218,7 +218,7 @@ export const PRESETS = {
       rv.output.connect(out);
       return { input, dispose: () => lfos.forEach((o) => o.stop()) };
     },
-    voice(ctx, bus, freq, y) {
+    voice(ctx, bus, freq, y, level = 1) {
       const oscs = [
         { node: osc(ctx, 'sawtooth', freq, -9), ratio: 1 },
         { node: osc(ctx, 'sawtooth', freq, 0), ratio: 1 },
@@ -235,7 +235,7 @@ export const PRESETS = {
       return voice(ctx, {
         oscs,
         amp,
-        peak: 0.12,
+        peak: 0.12 * level,
         attack: 0.25,
         release: 1.4,
         setY: (y, t) => lp.frequency.setTargetAtTime(expMap(y, 250, 7000), t, 0.05),
@@ -245,6 +245,7 @@ export const PRESETS = {
 
   industrial: {
     name: 'Industrial',
+    chordStyle: 'power', // volle Akkorde werden mit starker Verzerrung zu Brei
     hint: 'unten dumpf, oben kreischend',
     bus(ctx, out) {
       const input = ctx.createGain();
@@ -266,7 +267,7 @@ export const PRESETS = {
       rv.output.connect(out);
       return { input, dispose() {} };
     },
-    voice(ctx, bus, freq, y) {
+    voice(ctx, bus, freq, y, level = 1) {
       // Grundton, Quinte und Unteroktave: wie ein verzerrter Power-Chord
       const oscs = [
         { node: osc(ctx, 'sawtooth', freq, -6), ratio: 1 },
@@ -283,7 +284,7 @@ export const PRESETS = {
       return voice(ctx, {
         oscs,
         amp,
-        peak: 0.3,
+        peak: 0.3 * level,
         attack: 0.004,
         release: 0.25,
         setY: (y, t) => lp.frequency.setTargetAtTime(expMap(y, 200, 5000), t, 0.03),
@@ -337,7 +338,7 @@ export const PRESETS = {
         dispose: () => hiss.stop(),
       };
     },
-    voice(ctx, bus, freq, y) {
+    voice(ctx, bus, freq, y, level = 1) {
       const tri = osc(ctx, 'triangle', freq);
       const sq = osc(ctx, 'square', freq * 2);
       const sqG = ctx.createGain();
@@ -355,7 +356,7 @@ export const PRESETS = {
       return voice(ctx, {
         oscs: [{ node: tri, ratio: 1 }, { node: sq, ratio: 2 }],
         amp,
-        peak: 0.3,
+        peak: 0.3 * level,
         attack: 0.015,
         release: 0.5,
         setY: (y, t) => lp.frequency.setTargetAtTime(expMap(y, 350, 4500), t, 0.05),
@@ -368,37 +369,92 @@ export const PRESETS = {
 // ---------- Engine ----------
 
 const MAX_VOICES = 6;
+const MAX_CHORDS = 2;
+export const MODES = ['scale', 'chord', 'free'];
+
+/** Ein Finger im Akkord-Modus: mehrere Stimmen, die gemeinsam gesteuert werden */
+class ChordVoice {
+  constructor(engine, x, y) {
+    this.engine = engine;
+    this.x = x;
+    this.y = y;
+    this.isChord = true;
+    this.n = complexityFor(y);
+    this.degree = degreeIndex(x);
+    const prev = engine.lastChord && performance.now() - engine.lastChord.time < 4000 ? engine.lastChord.notes : null;
+    const ch = voiceChord(DEGREES[this.degree], this.n, prev, engine.chordStyle());
+    this.name = ch.name;
+    this.notes = ch.notes;
+    const level = 0.9 / Math.sqrt(ch.notes.length);
+    const preset = PRESETS[engine.presetId];
+    // Jede Stimme startet beim nächstgelegenen Ton des vorigen Akkords und gleitet kurz zum Ziel
+    this.voices = ch.notes.map((s) => {
+      const from = prev ? prev.reduce((a, b) => (Math.abs(b - s) < Math.abs(a - s) ? b : a)) : s;
+      const v = preset.voice(engine.ctx, engine.bus, semisToFreq(from), y, level);
+      if (from !== s) v.move(semisToFreq(s), y, 0.035);
+      return v;
+    });
+    engine.rememberChord(this);
+  }
+
+  update(x, y) {
+    this.x = x;
+    this.y = y;
+    const d = degreeIndex(x);
+    if (d !== this.degree) {
+      // Finger in eine andere Spalte geschoben: neuer Akkord mit gleicher Stimmenzahl, weich geführt
+      this.degree = d;
+      const ch = voiceChord(DEGREES[d], this.n, this.notes, this.engine.chordStyle());
+      this.name = ch.name;
+      this.notes = ch.notes;
+      this.engine.rememberChord(this);
+    }
+    this.voices.forEach((v, i) => v.move(semisToFreq(this.notes[i]), y, 0.035));
+  }
+
+  release() {
+    this.voices.forEach((v) => v.release());
+  }
+}
 
 export class Engine {
   constructor() {
     this.ctx = null;
     this.presetId = 'robotik';
-    this.quantize = true;
+    this.mode = 'scale'; // 'scale' | 'chord' | 'free'
     this.voices = new Map();
     this.bus = null;
-    this.chord = null; // aktueller Akkord (nur solange der Beat läuft)
-    this.nextChord = null;
-    this.chordChangedAt = 0;
+    this.lastChord = null; // {name, notes, time}: Grundlage für die Stimmführung des nächsten Akkords
   }
 
-  /** Spaltenraster der Halbtöne: Akkordtöne, Pentatonik oder null (frei) */
-  grid() {
-    if (!this.quantize) return null;
-    return this.chord ? chordGrid(this.chord) : SCALE_STEPS;
+  get quantize() {
+    return this.mode !== 'free';
+  }
+
+  chordStyle() {
+    return PRESETS[this.presetId].chordStyle || 'full';
+  }
+
+  rememberChord(cv) {
+    this.lastChord = { name: cv.name, notes: cv.notes, time: performance.now() };
+  }
+
+  /** Beschriftung der Spalten (oder null im Frei-Modus) */
+  columnLabels() {
+    if (this.mode === 'free') return null;
+    if (this.mode === 'chord') return DEGREES.map((d) => d.names[0]);
+    return SCALE_STEPS.map((s) => noteName(s).replace(/\d/, ''));
   }
 
   semisFor(x) {
-    const g = this.grid();
-    if (!g) return xToSemis(x, false);
-    return g[Math.floor(Math.min(Math.max(x, 0), 0.9999) * g.length)];
+    return xToSemis(x, this.quantize);
   }
 
-  /** Akkordwechsel: gehaltene Töne gleiten auf den passenden Ton des neuen Akkords */
-  setChord(name, next = null) {
-    this.chord = name;
-    this.nextChord = next;
-    this.chordChangedAt = performance.now();
-    for (const v of this.voices.values()) v.move(this.freqFor(v.x), v.y, 0.03);
+  /** Text neben dem Finger: Akkordname oder Tonname */
+  labelFor(id, x) {
+    const v = this.voices.get(id);
+    if (v?.isChord) return v.name;
+    return noteName(this.semisFor(x));
   }
 
   async start() {
@@ -427,6 +483,7 @@ export class Engine {
   setPreset(id) {
     if (!PRESETS[id] || id === this.presetId) return;
     this.presetId = id;
+    this.lastChord = null;
     if (!this.ctx) return;
     this.releaseAll();
     const old = this.bus;
@@ -440,18 +497,26 @@ export class Engine {
   }
 
   noteOn(id, x, y) {
-    if (!this.ctx || this.voices.size >= MAX_VOICES) return;
-    const v = PRESETS[this.presetId].voice(this.ctx, this.bus, this.freqFor(x), y);
-    v.x = x;
-    v.y = y;
+    if (!this.ctx) return;
+    let v;
+    if (this.mode === 'chord') {
+      if ([...this.voices.values()].filter((v) => v.isChord).length >= MAX_CHORDS) return;
+      v = new ChordVoice(this, x, y);
+    } else {
+      if (this.voices.size >= MAX_VOICES) return;
+      v = PRESETS[this.presetId].voice(this.ctx, this.bus, this.freqFor(x), y);
+      v.x = x;
+      v.y = y;
+    }
     this.voices.set(id, v);
     this.bus.activity?.(this.voices.size);
   }
 
   noteMove(id, x, y) {
-    // Frei: Ton folgt dem Finger direkt. Tonleiter: kurzes Gleiten zum nächsten Ton.
     const v = this.voices.get(id);
     if (!v) return;
+    if (v.isChord) return v.update(x, y);
+    // Frei: Ton folgt dem Finger direkt. Tonleiter: kurzes Gleiten zum nächsten Ton.
     v.x = x;
     v.y = y;
     v.move(this.freqFor(x), y, this.quantize ? 0.02 : 0.008);

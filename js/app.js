@@ -1,21 +1,13 @@
-import { Engine, PRESETS } from './engine.js';
+import { Engine, PRESETS, MODES } from './engine.js';
 import { Visuals } from './visuals.js';
 import { DrumMachine } from './drums.js';
-import { Harmony } from './harmony.js';
 
 const engine = new Engine();
 const canvas = document.getElementById('stage');
 const visuals = new Visuals(canvas, engine);
 const drums = new DrumMachine(engine);
 visuals.drums = drums;
-const harmony = new Harmony();
 
-// Akkordwechsel exakt zum Taktbeginn (der Drumcomputer plant ~120 ms voraus)
-drums.onBar = (bar, time) => {
-  const c = harmony.chordForBar(bar);
-  const delay = Math.max(0, (time - engine.ctx.currentTime) * 1000);
-  setTimeout(() => drums.running && engine.setChord(c.now, c.next), delay);
-};
 const startEl = document.getElementById('start');
 const presetsEl = document.getElementById('presets');
 const modeBtn = document.getElementById('mode');
@@ -53,7 +45,7 @@ function selectPreset(id) {
   visuals.presetChanged();
   document.body.dataset.preset = id;
   presetsEl.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.id === id));
-  hintEl.textContent = PRESETS[id].hint;
+  updateHint();
   store.set('preset', id);
   // Beat gibt es (vorerst) nur bei Robotik
   const hasBeat = id === 'robotik';
@@ -64,11 +56,7 @@ function selectPreset(id) {
 // ---- Beat (Robotik) ----
 function setBeat(on) {
   if (on) drums.start();
-  else {
-    drums.stop();
-    harmony.reset();
-    if (engine.chord) engine.setChord(null);
-  }
+  else drums.stop();
   beatBtn.setAttribute('aria-pressed', drums.running);
   beatBtn.textContent = drums.running ? 'Beat ■' : 'Beat ▶';
 }
@@ -83,17 +71,24 @@ function setTempo(bpm) {
 tempoBtn.addEventListener('click', () => setTempo(TEMPI[(TEMPI.indexOf(drums.bpm) + 1) % TEMPI.length]));
 setTempo(TEMPI.includes(+store.get('bpm')) ? +store.get('bpm') : 116);
 
-// ---- Frei / Tonleiter ----
-function setQuantize(q) {
-  engine.quantize = q;
-  modeBtn.textContent = q ? 'Tonleiter' : 'Frei';
-  modeBtn.setAttribute('aria-pressed', q);
-  store.set('quantize', q ? '1' : '0');
+// ---- Modus: Tonleiter → Akkorde → Frei ----
+const MODE_LABELS = { scale: 'Tonleiter', chord: 'Akkorde', free: 'Frei' };
+function updateHint() {
+  hintEl.textContent = engine.mode === 'chord' ? 'Akkorde: unten schlicht, oben schillernd' : PRESETS[engine.presetId].hint;
 }
-modeBtn.addEventListener('click', () => setQuantize(!engine.quantize));
+function setMode(m) {
+  engine.releaseAll();
+  visuals.touches.clear();
+  engine.mode = m;
+  modeBtn.textContent = MODE_LABELS[m];
+  modeBtn.setAttribute('aria-pressed', m !== 'free');
+  updateHint();
+  store.set('mode', m);
+}
+modeBtn.addEventListener('click', () => setMode(MODES[(MODES.indexOf(engine.mode) + 1) % MODES.length]));
 
 selectPreset(PRESETS[store.get('preset')] ? store.get('preset') : 'robotik');
-setQuantize(store.get('quantize') !== '0');
+setMode(MODES.includes(store.get('mode')) ? store.get('mode') : 'scale');
 
 // ---- Start (Audio darf erst nach einer Berührung starten) ----
 const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);

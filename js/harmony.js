@@ -1,50 +1,72 @@
-// Akkordfolgen in A-Moll. Die Fingertöne rasten auf die Töne des aktuellen Akkords ein.
-// Tonhöhen als Halbtonabstand zum Grundton A (0 = A, 3 = C, 7 = E, 10 = G ...).
+// Akkord-Modus: jeder Fingertipp spielt einen Akkord.
+// Links nach rechts: die 7 Stufen der A-Moll-Tonleiter. Unten nach oben: schlicht bis schillernd.
+// Tonhöhen als Halbtöne über A2 (0 = A, 3 = C, 7 = E, 10 = G ...).
 
-export const CHORDS = {
-  Am7: [0, 3, 7, 10], // A C E G
-  Dm7: [5, 8, 0, 3], // D F A C
-  Em7: [7, 10, 2, 5], // E G H D
-  Fmaj7: [8, 0, 3, 7], // F A C E
-  Cmaj7: [3, 7, 10, 2], // C E G H
-  G7: [10, 2, 5, 8], // G H D F
-};
-
-// Gängige Folgen in Moll (Stufen in Klammern)
-export const PROGRESSIONS = [
-  ['Am7', 'Fmaj7', 'Cmaj7', 'G7'], // i – VI – III – VII
-  ['Am7', 'G7', 'Fmaj7', 'Em7'], // i – VII – VI – v (absteigend)
-  ['Am7', 'Dm7', 'Fmaj7', 'Em7'], // i – iv – VI – v
-  ['Fmaj7', 'G7', 'Am7', 'Am7'], // VI – VII – i – i
+// Töne geordnet nach Wichtigkeit: Grundton, Terz, Quinte, Septime/Sexte, Zusatzton.
+// Alle Töne gehören zur A-Moll-Tonleiter, einzige Ausnahme ist das Gis in E7 (harmonisches Moll),
+// das den Zug zurück nach Am verstärkt.
+export const DEGREES = [
+  { names: ['Am', 'Am7', 'Am9'], tones: [0, 3, 7, 10, 2] }, // A C E G H
+  { names: ['H°', 'Hø7', 'Hø11'], tones: [2, 5, 8, 0, 7] }, // H D F A E
+  { names: ['C', 'Cmaj7', 'Cmaj9'], tones: [3, 7, 10, 2, 5] }, // C E G H D
+  { names: ['Dm', 'Dm7', 'Dm9'], tones: [5, 8, 0, 3, 7] }, // D F A C E
+  { names: ['E', 'E7', 'E7♭13'], tones: [7, 11, 2, 5, 0] }, // E Gis H D C
+  { names: ['F', 'Fmaj7', 'Fmaj7♯11'], tones: [8, 0, 3, 7, 2] }, // F A C E H
+  { names: ['G', 'G6', 'G6/9'], tones: [10, 2, 5, 7, 0] }, // G H D E A
 ];
 
-const GRID_SIZE = 9;
-const BARS_PER_PROGRESSION = 16;
+const UPPER_LO = 10; // tiefster Ton der Akkordstimmen (G3)
+const UPPER_HI = 33; // höchster (F#5)
+const CENTER = 19; // bevorzugte Mitte (E4)
 
-/** Die ersten 9 Akkordtöne ab A2 aufwärts: das Spaltenraster für die Fingertöne */
-export function chordGrid(name) {
-  const pcs = CHORDS[name];
-  const grid = [];
-  for (let s = 0; grid.length < GRID_SIZE; s++) if (pcs.includes(s % 12)) grid.push(s);
-  return grid;
-}
+export const degreeFor = (x) => DEGREES[Math.floor(Math.min(Math.max(x, 0), 0.9999) * DEGREES.length)];
+export const degreeIndex = (x) => Math.floor(Math.min(Math.max(x, 0), 0.9999) * DEGREES.length);
 
-export class Harmony {
-  constructor() {
-    this.prog = PROGRESSIONS[0];
+/** Wie viele Akkordtöne: unten 3 (Dreiklang), Mitte 4, oben 5 */
+export const complexityFor = (y) => 3 + (y > 0.35) + (y > 0.7);
+
+/**
+ * Wählt die Lage eines Akkords so, dass sich jede Stimme gegenüber dem vorherigen Akkord
+ * möglichst wenig bewegt (Stimmführung). Ohne Vorgänger: möglichst mittig.
+ * style 'power': nur Grundton und Oktave (für verzerrte Klänge).
+ */
+export function voiceChord(degree, n, prev, style = 'full') {
+  const name = degree.names[n - 3];
+  const root = degree.tones[0];
+  if (style === 'power') {
+    const r = root < 5 ? root + 12 : root; // Grundton zwischen D3 und C#4
+    return { name: degree.names[0].replace('m', '').replace('°', '') + '5', notes: [r, r + 12] };
   }
-
-  /** Akkord für Takt n (ab 1). Alle 16 Takte wird eine andere Folge gewählt. */
-  chordForBar(n) {
-    const i = n - 1;
-    if (i > 0 && i % BARS_PER_PROGRESSION === 0) {
-      const others = PROGRESSIONS.filter((p) => p !== this.prog);
-      this.prog = others[Math.floor(Math.random() * others.length)];
+  const pcs = degree.tones.slice(0, n);
+  const options = pcs.map((pc) => {
+    const o = [];
+    for (let s = UPPER_LO; s <= UPPER_HI; s++) if (((s % 12) + 12) % 12 === pc) o.push(s);
+    return o;
+  });
+  const prevUpper = prev ? prev.slice(1) : null;
+  let best = null;
+  const walk = (i, chosen) => {
+    if (i === options.length) {
+      const sorted = [...chosen].sort((a, b) => a - b);
+      if (sorted[sorted.length - 1] - sorted[0] > 13 + n * 2) return; // eng genug, damit es wie ein Akkord klingt (mehr Platz für mehr Töne)
+      let cost = 0;
+      for (let k = 1; k < sorted.length; k++) {
+        const gap = sorted[k] - sorted[k - 1];
+        if (gap === 1) cost += 14; // Halbton direkt nebeneinander klingt schief: fast nie
+        else if (gap === 2) cost += sorted[k - 1] < 15 ? 5 : 1.5; // Ganzton-Reibung sparsam, in tiefer Lage (unter C4) klingt sie matschig
+      }
+      const mean = sorted.reduce((a, b) => a + b, 0) / sorted.length;
+      cost += Math.abs(mean - CENTER) * (prevUpper ? 0.25 : 1);
+      if (prevUpper) for (const s of sorted) cost += Math.min(...prevUpper.map((p) => Math.abs(p - s)));
+      if (!best || cost < best.cost) best = { cost, notes: sorted };
+      return;
     }
-    return { now: this.prog[i % 4], next: (i + 1) % BARS_PER_PROGRESSION === 0 ? null : this.prog[(i + 1) % 4] };
-  }
-
-  reset() {
-    this.prog = PROGRESSIONS[0];
-  }
+    for (const s of options[i]) if (!chosen.includes(s)) walk(i + 1, [...chosen, s]);
+  };
+  walk(0, []);
+  // Bass: Grundton unter den Akkordstimmen
+  let bass = root;
+  while (bass > best.notes[0] - 3) bass -= 12;
+  while (bass + 12 <= best.notes[0] - 3 && bass + 12 <= 9) bass += 12;
+  return { name, notes: [bass, ...best.notes] };
 }

@@ -1,7 +1,6 @@
 // Visualisierung: jede Klangfarbe hat ihren eigenen Look.
 // Gezeichnet wird auf ein Vollbild-Canvas, gespeist aus den Fingerpositionen und dem Audio-Analyser.
 
-import { noteName } from './engine.js';
 
 const rand = (a, b) => a + Math.random() * (b - a);
 const MAX_PARTICLES = 350;
@@ -37,7 +36,7 @@ export class Visuals {
   // ---- Ereignisse aus app.js (Koordinaten in Pixeln) ----
 
   down(id, px, py) {
-    this.touches.set(id, { x: px, y: py, hue: rand(0, 360), born: this.time, lastRipple: this.time });
+    this.touches.set(id, { id, x: px, y: py, hue: rand(0, 360), born: this.time, lastRipple: this.time });
     this.flash = 1;
     const theme = THEMES[this.engine.presetId];
     theme.onDown?.(this, px, py);
@@ -89,16 +88,16 @@ export class Visuals {
     }
   }
 
-  noteLabel(px) {
-    return noteName(this.engine.semisFor(px / this.w));
+  noteLabel(t) {
+    return this.engine.labelFor(t.id, t.x / this.w);
   }
 
   /** Spaltenraster im Tonleiter-Modus */
   guides(color, labelColor, font) {
-    const grid = this.engine.grid();
-    if (!grid) return;
+    const labels = this.engine.columnLabels();
+    if (!labels) return;
     const g = this.g;
-    const n = grid.length;
+    const n = labels.length;
     const cw = this.w / n;
     g.save();
     g.strokeStyle = color;
@@ -113,7 +112,7 @@ export class Visuals {
         g.lineTo(i * cw, this.h);
         g.stroke();
       }
-      g.fillText(noteName(grid[i]).replace(/\d/, ''), i * cw + cw / 2, this.h - 18);
+      g.fillText(labels[i], i * cw + cw / 2, this.h - 18);
     }
     g.restore();
   }
@@ -125,6 +124,7 @@ export class Visuals {
     const lvl = this.level();
     const theme = THEMES[this.engine.presetId];
     theme.draw(this, dt, lvl);
+    if (this.engine.mode === 'chord') drawChord(this);
     this.clearAll = false;
     this.flash = Math.max(0, this.flash - dt * 4);
     requestAnimationFrame((t) => this.frame(t));
@@ -150,25 +150,32 @@ function wavePath(v, { yMid, amp, step = 4, shape = (s) => s, stepped = false })
   }
 }
 
-// Aktueller und nächster Akkord, kurzes Aufleuchten beim Wechsel
+// Name des zuletzt gespielten Akkords: leuchtet beim Anschlag auf und verblasst nach dem Loslassen
+const CHORD_STYLE = {
+  robotik: { font: 'bold 44px ui-monospace, monospace', glow: '#7ff0ff' },
+  psychedelik: { font: '600 44px system-ui, sans-serif', glow: '#ff8cf5' },
+  industrial: { font: '52px Impact, system-ui, sans-serif', glow: '#ff3b1f' },
+  lofi: { font: 'italic bold 44px Georgia, serif', glow: '#ffb055' },
+};
+
 function drawChord(v) {
-  const g = v.g;
   const e = v.engine;
-  const glow = Math.exp(-(performance.now() - e.chordChangedAt) / 250);
-  const y = 150;
+  const c = e.lastChord;
+  if (!c) return;
+  const held = e.voices.size > 0;
+  const age = (performance.now() - c.time) / 1000;
+  const alpha = held ? 1 : Math.max(0, 1 - (age - 0.5) / 1.5);
+  if (alpha <= 0) return;
+  const glow = Math.exp(-age * 4);
+  const st = CHORD_STYLE[e.presetId];
+  const g = v.g;
   g.save();
   g.textAlign = 'center';
-  g.font = 'bold 44px ui-monospace, monospace';
-  g.shadowColor = '#7ff0ff';
+  g.font = st.font;
+  g.shadowColor = st.glow;
   g.shadowBlur = 8 + glow * 30;
-  g.fillStyle = `rgba(255,255,255,${0.75 + glow * 0.25})`;
-  g.fillText(e.chord, v.w / 2, y);
-  g.shadowBlur = 0;
-  if (e.nextChord) {
-    g.font = '14px ui-monospace, monospace';
-    g.fillStyle = 'rgba(127,240,255,0.6)';
-    g.fillText('nächster: ' + e.nextChord, v.w / 2, y + 24);
-  }
+  g.fillStyle = `rgba(255,255,255,${alpha * (0.8 + glow * 0.2)})`;
+  g.fillText(c.name, v.w / 2, 150);
   g.restore();
 }
 
@@ -236,7 +243,6 @@ const THEMES = {
       g.stroke();
       v.guides('rgba(80,220,255,0.18)', 'rgba(150,235,255,0.6)', '12px ui-monospace, monospace');
       if (beat) drawSteps(v, beat);
-      if (v.engine.chord) drawChord(v);
       // digitale, gestufte Wellenform
       g.strokeStyle = '#7ff0ff';
       g.lineWidth = 2;
@@ -264,7 +270,7 @@ const THEMES = {
         g.restore();
         g.fillStyle = '#ffffff';
         g.font = 'bold 14px ui-monospace, monospace';
-        g.fillText(v.noteLabel(t.x), t.x + size, t.y - size / 2);
+        g.fillText(v.noteLabel(t), t.x + size, t.y - size / 2);
       }
     },
   },
@@ -438,7 +444,7 @@ const THEMES = {
         g.fillStyle = '#1d1712';
         g.font = 'italic bold 13px Georgia, serif';
         g.textAlign = 'center';
-        g.fillText(v.noteLabel(t.x), t.x, t.y + 4);
+        g.fillText(v.noteLabel(t), t.x, t.y + 4);
         g.textAlign = 'start';
       }
       // Filmkorn

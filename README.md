@@ -8,7 +8,10 @@ Man spielt mit den Fingern auf einer Fläche, und jeder Klang hat seinen eigenen
 - **Links nach rechts:** Tonhöhe (zwei Oktaven ab A2)
 - **Unten nach oben:** Klangfarbe (dumpf bis hell, bei Robotik Vokal "u" bis "i")
 - **Mehrere Finger:** mehrere Töne gleichzeitig (bis zu 6)
-- **Tonleiter / Frei:** einrasten auf die Moll-Pentatonik oder stufenlos gleiten
+- **Modus-Knopf (Tonleiter → Akkorde → Frei):**
+  - *Tonleiter:* einrasten auf die Moll-Pentatonik
+  - *Akkorde:* jeder Finger spielt einen ganzen Akkord (siehe unten)
+  - *Frei:* stufenlos gleiten
 
 ## Klangfarben
 
@@ -26,10 +29,20 @@ die Dichte wandert langsam, alle 8 Takte gibt es ein Fill und gelegentlich einen
 Kick auf 1 und 3 sowie Snare auf 2 und 4 bleiben als Gerüst immer stehen.
 Tempo umschaltbar: 100, 116 oder 132 BPM. Die Leiste unten zeigt die 16 Schritte.
 
-**Akkordfolge:** Solange der Beat läuft und "Tonleiter" aktiv ist, rasten die Fingertöne auf die Töne
-des aktuellen Akkords ein (9 Spalten, A-Moll, Septakkorde). Der Akkord wechselt jeden Takt, alle 16 Takte
-wird eine andere bewährte Folge gewählt (z. B. Am7 – Fmaj7 – Cmaj7 – G7). Gehaltene Töne gleiten beim
-Wechsel auf den passenden Akkordton. Oben steht der aktuelle und der nächste Akkord.
+### Akkord-Modus
+
+Jeder Fingertipp spielt einen Akkord, der nächste schliesst musikalisch an den vorherigen an.
+
+- **Links nach rechts:** die 7 Stufen von A-Moll (Am, H°, C, Dm, E, F, G). Alle stammen aus derselben
+  Tonart und passen deshalb zueinander. E ist ein E7 (harmonisches Moll), weil er stärker zurück nach Am zieht.
+- **Unten nach oben:** schlicht bis schillernd: Dreiklang, Septakkord, dann mit Zusatzton
+  (z. B. Am9, Fmaj7♯11, G6/9).
+- **Stimmführung:** Die Lage jedes neuen Akkords wird so gewählt, dass sich die Stimmen möglichst wenig
+  bewegen. Halbton-Reibungen direkt nebeneinander und enge Lagen in der Tiefe werden vermieden.
+- **Übergang:** Die Töne gleiten ganz kurz aus dem vorherigen Akkord in den neuen.
+- **Industrial** spielt nur Power-Chords (Grundton und Oktave), weil volle Akkorde mit starker
+  Verzerrung matschig klingen.
+- Höchstens zwei Akkorde gleichzeitig.
 
 Alle Klänge werden live mit der Web Audio API erzeugt. Es gibt keine Samples und damit keine Lizenzfragen.
 
@@ -52,7 +65,7 @@ Hinweis: Die Installation als App (PWA) und der Offline-Modus funktionieren nur 
 ## Aufbau
 
 - `js/engine.js` – Klangmaschine und die vier Klangfarben
-- `js/harmony.js` – Akkorde und Akkordfolgen
+- `js/harmony.js` – Akkorde und Stimmführung für den Akkord-Modus
 - `js/drums.js` – generativer Drumcomputer (Robotik)
 - `js/visuals.js` – Visualisierung, ein Theme pro Klangfarbe
 - `js/app.js` – Bedienung, Multitouch, Einstellungen
