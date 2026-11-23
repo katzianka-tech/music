@@ -72,9 +72,10 @@ tempoBtn.addEventListener('click', () => setTempo(TEMPI[(TEMPI.indexOf(drums.bpm
 setTempo(TEMPI.includes(+store.get('bpm')) ? +store.get('bpm') : 116);
 
 // ---- Modus: Tonleiter → Akkorde → Frei ----
-const MODE_LABELS = { scale: 'Tonleiter', chord: 'Akkorde', free: 'Frei' };
+const MODE_LABELS = { scale: 'Tonleiter', chord: 'Akkorde', split: 'Geteilt', free: 'Frei' };
 function updateHint() {
-  hintEl.textContent = engine.mode === 'chord' ? '1. Finger Akkord, weitere Melodie' : PRESETS[engine.presetId].hint;
+  const hints = { chord: '1. Finger Akkord, weitere Melodie', split: 'unten Akkorde, oben Melodie' };
+  hintEl.textContent = hints[engine.mode] || PRESETS[engine.presetId].hint;
 }
 function setMode(m) {
   engine.releaseAll();

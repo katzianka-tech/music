@@ -10,7 +10,8 @@ Man spielt mit den Fingern auf einer Fläche, und jeder Klang hat seinen eigenen
 - **Mehrere Finger:** mehrere Töne gleichzeitig (bis zu 6)
 - **Modus-Knopf (Tonleiter → Akkorde → Frei):**
   - *Tonleiter:* einrasten auf die Moll-Pentatonik
-  - *Akkorde:* jeder Finger spielt einen ganzen Akkord (siehe unten)
+  - *Akkorde:* erster Finger spielt einen Akkord, weitere Finger Melodie (siehe unten)
+  - *Geteilt:* untere Hälfte Akkorde, obere Hälfte Melodie
   - *Frei:* stufenlos gleiten
 
 ## Klangfarben
@@ -42,10 +43,16 @@ Jeder Fingertipp spielt einen Akkord, der nächste schliesst musikalisch an den 
 - **Übergang:** Die Töne gleiten ganz kurz aus dem vorherigen Akkord in den neuen.
 - **Industrial** spielt nur Power-Chords (Grundton und Oktave), weil volle Akkorde mit starker
   Verzerrung matschig klingen.
-- **Melodie dazu:** Solange ein Akkord gehalten wird, spielen alle weiteren Finger Melodietöne.
-  Das Raster zeigt dann die fünf Töne der schillerndsten Form des Akkords über zwei Oktaven
-  (bei Am: A H C E G). Wechselt der Akkord, gleiten gehaltene Melodietöne auf den nächsten passenden Ton.
+- **Melodie dazu:** Solange ein Akkord gehalten wird, spielen alle weiteren Finger Melodietöne aus der
+  A-Moll-Tonleiter (12 Spalten ab A3; über E7 mit Gis statt G). Akkordtöne sind hell und fett beschriftet
+  (Ruhepunkte), Durchgangstöne gedimmt (Spannung). Wechselt der Akkord, gleiten gehaltene Melodietöne mit.
   Wird der Akkord losgelassen, ist der nächste Finger wieder ein Akkord.
+
+### Geteilt-Modus
+
+Untere Hälfte: Akkorde (innerhalb der Hälfte gilt unten schlicht, oben schillernd; ein neuer Finger
+ersetzt den alten Akkord). Obere Hälfte: Melodie wie oben. Ohne gehaltenen Akkord richtet sich die Melodie
+nach dem zuletzt gespielten Akkord.
 
 Alle Klänge werden live mit der Web Audio API erzeugt. Es gibt keine Samples und damit keine Lizenzfragen.
 

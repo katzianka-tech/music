@@ -1,7 +1,7 @@
 // Klangmaschine: vier synthetische Klangfarben, gesteuert über Position (x = Tonhöhe, y = Klangfarbe).
 // Alles wird live mit der Web Audio API erzeugt, es gibt keine Samples.
 
-import { DEGREES, degreeIndex, complexityFor, voiceChord, melodyGrid } from './harmony.js';
+import { DEGREES, degreeIndex, complexityFor, voiceChord, melodyGrid, chordTones } from './harmony.js';
 
 // ---------- Tonhöhe ----------
 
@@ -369,9 +369,10 @@ export const PRESETS = {
 // ---------- Engine ----------
 
 const MAX_VOICES = 6;
-export const MODES = ['scale', 'chord', 'free'];
+export const MODES = ['scale', 'chord', 'split', 'free'];
+const SPLIT = 0.5; // Geteilt: unterhalb Akkorde, oberhalb Melodie (y von unten gemessen)
 
-/** Ein Finger im Akkord-Modus: mehrere Stimmen, die gemeinsam gesteuert werden */
+/** Ein Finger, der Akkorde spielt: mehrere Stimmen, die gemeinsam gesteuert werden */
 class ChordVoice {
   constructor(engine, x, y) {
     this.engine = engine;
@@ -394,6 +395,7 @@ class ChordVoice {
       return v;
     });
     engine.rememberChord(this);
+    engine.retuneMelody();
   }
 
   update(x, y) {
@@ -421,10 +423,10 @@ export class Engine {
   constructor() {
     this.ctx = null;
     this.presetId = 'robotik';
-    this.mode = 'scale'; // 'scale' | 'chord' | 'free'
+    this.mode = 'scale'; // 'scale' | 'chord' | 'split' | 'free'
     this.voices = new Map();
     this.bus = null;
-    this.lastChord = null; // {name, notes, time}: Grundlage für die Stimmführung des nächsten Akkords
+    this.lastChord = null; // {name, notes, degree, time}: Grundlage für Stimmführung und Melodie
   }
 
   get quantize() {
@@ -436,41 +438,67 @@ export class Engine {
   }
 
   rememberChord(cv) {
-    this.lastChord = { name: cv.name, notes: cv.notes, time: performance.now() };
+    this.lastChord = { name: cv.name, notes: cv.notes, degree: cv.degree, time: performance.now() };
   }
 
-  /** Der gerade gehaltene Akkord (im Akkord-Modus höchstens einer) */
+  /** Der gerade gehaltene Akkord (es gibt höchstens einen) */
   heldChord() {
     for (const v of this.voices.values()) if (v.isChord) return v;
     return null;
   }
 
-  /** Melodieton für Position x über dem gehaltenen Akkord */
-  melodySemis(x, chord = this.heldChord()) {
-    const g = melodyGrid(chord.degree);
+  /** Stufe, nach der sich die Melodie richtet: gehaltener, sonst zuletzt gespielter Akkord, sonst Am */
+  melodyDegree() {
+    return this.heldChord()?.degree ?? this.lastChord?.degree ?? 0;
+  }
+
+  melodySemis(x) {
+    const g = melodyGrid(this.melodyDegree());
     return g[Math.floor(Math.min(Math.max(x, 0), 0.9999) * g.length)];
   }
 
-  /** Akkord gewechselt: gehaltene Melodietöne gleiten auf den nächsten passenden Ton */
+  /** Akkord gewechselt: gehaltene Melodietöne gleiten auf den Ton der neuen Tonleiter an gleicher Stelle */
   retuneMelody() {
-    const chord = this.heldChord();
-    if (!chord) return;
     for (const v of this.voices.values()) {
       if (!v.isMelody) continue;
-      v.semis = this.melodySemis(v.x, chord);
+      v.semis = this.melodySemis(v.x);
       v.move(semisToFreq(v.semis), v.y, 0.035);
     }
   }
 
-  /** Beschriftung der Spalten (oder null im Frei-Modus) */
-  columnLabels() {
-    if (this.mode === 'free') return null;
-    if (this.mode === 'chord') {
-      const chord = this.heldChord();
-      if (chord) return melodyGrid(chord.degree).map((s) => noteName(s).replace(/\d/, ''));
-      return DEGREES.map((d) => d.names[0]);
+  /** Im Geteilt-Modus: y (0 unten .. 1 oben) in die Zone umrechnen */
+  zoneY(y, zone) {
+    if (this.mode !== 'split') return y;
+    const ly = zone === 'chord' ? y / SPLIT : (y - SPLIT) / (1 - SPLIT);
+    return Math.min(Math.max(ly, 0), 1);
+  }
+
+  /**
+   * Spalten-Zonen für die Anzeige: [{y0, y1, labels, strong?, active?}] (y von unten, 0..1)
+   * oder null im Frei-Modus.
+   */
+  layout() {
+    const chordNames = DEGREES.map((d) => d.names[0]);
+    const melody = () => {
+      const d = this.melodyDegree();
+      const ct = chordTones(d);
+      const g = melodyGrid(d);
+      return { labels: g.map((s) => noteName(s).replace(/\d/, '')), strong: g.map((s) => ct.includes(s % 12)) };
+    };
+    const held = this.heldChord();
+    switch (this.mode) {
+      case 'free':
+        return null;
+      case 'scale':
+        return [{ y0: 0, y1: 1, labels: SCALE_STEPS.map((s) => noteName(s).replace(/\d/, '')) }];
+      case 'chord':
+        return [held ? { y0: 0, y1: 1, ...melody() } : { y0: 0, y1: 1, labels: chordNames }];
+      case 'split':
+        return [
+          { y0: 0, y1: SPLIT, labels: chordNames, active: held?.degree },
+          { y0: SPLIT, y1: 1, ...melody() },
+        ];
     }
-    return SCALE_STEPS.map((s) => noteName(s).replace(/\d/, ''));
   }
 
   semisFor(x) {
@@ -482,6 +510,7 @@ export class Engine {
     const v = this.voices.get(id);
     if (v?.isChord) return v.name;
     if (v?.isMelody) return noteName(v.semis);
+    if (!v) return ''; // z. B. Akkord-Finger, dessen Akkord durch einen neuen ersetzt wurde
     return noteName(this.semisFor(x));
   }
 
@@ -524,18 +553,31 @@ export class Engine {
     return semisToFreq(this.semisFor(x));
   }
 
+  melodyVoice(x, y) {
+    const semis = this.melodySemis(x);
+    const v = PRESETS[this.presetId].voice(this.ctx, this.bus, semisToFreq(semis), y, 0.85);
+    return Object.assign(v, { x, y, semis, isMelody: true, zone: 'melody' });
+  }
+
   noteOn(id, x, y) {
     if (!this.ctx) return;
     let v;
-    if (this.mode === 'chord') {
-      const chord = this.heldChord();
-      if (!chord) v = new ChordVoice(this, x, y);
+    if (this.mode === 'split') {
+      if (y < SPLIT) {
+        // Neuer Akkord unten ersetzt den alten (wie Umgreifen am Klavier)
+        for (const [hid, hv] of this.voices) if (hv.isChord) this.noteOff(hid);
+        v = new ChordVoice(this, x, this.zoneY(y, 'chord'));
+        v.zone = 'chord';
+      } else {
+        if (this.voices.size >= MAX_VOICES) return;
+        v = this.melodyVoice(x, this.zoneY(y, 'melody'));
+      }
+    } else if (this.mode === 'chord') {
+      if (!this.heldChord()) v = new ChordVoice(this, x, y);
       else {
         // Akkord wird gehalten: dieser Finger spielt Melodie
         if (this.voices.size >= MAX_VOICES) return;
-        const semis = this.melodySemis(x, chord);
-        v = PRESETS[this.presetId].voice(this.ctx, this.bus, semisToFreq(semis), y, 0.85);
-        Object.assign(v, { x, y, semis, isMelody: true });
+        v = this.melodyVoice(x, y);
       }
     } else {
       if (this.voices.size >= MAX_VOICES) return;
@@ -550,13 +592,12 @@ export class Engine {
   noteMove(id, x, y) {
     const v = this.voices.get(id);
     if (!v) return;
-    if (v.isChord) return v.update(x, y);
+    if (v.isChord) return v.update(x, this.zoneY(y, 'chord'));
     if (v.isMelody) {
       v.x = x;
-      v.y = y;
-      const chord = this.heldChord();
-      if (chord) v.semis = this.melodySemis(x, chord); // ohne Akkord bleibt der Ton stehen
-      return v.move(semisToFreq(v.semis), y, 0.02);
+      v.y = this.zoneY(y, 'melody');
+      v.semis = this.melodySemis(x);
+      return v.move(semisToFreq(v.semis), v.y, 0.02);
     }
     // Frei: Ton folgt dem Finger direkt. Tonleiter: kurzes Gleiten zum nächsten Ton.
     v.x = x;

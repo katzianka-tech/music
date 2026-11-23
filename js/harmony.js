@@ -23,15 +23,20 @@ export const degreeFor = (x) => DEGREES[Math.floor(Math.min(Math.max(x, 0), 0.99
 export const degreeIndex = (x) => Math.floor(Math.min(Math.max(x, 0), 0.9999) * DEGREES.length);
 
 /**
- * Melodietöne über einem gehaltenen Akkord: die fünf Töne seiner schillerndsten Form
- * (z. B. Am9: A C E G H), ab A3 aufwärts. Passen deshalb immer zum Akkord.
+ * Melodietöne über einem Akkord: die ganze A-Moll-Tonleiter (7 Töne pro Oktave), 12 Spalten ab A3.
+ * Über E7 wird G zu Gis (harmonisches Moll), sonst würde die Melodie mit dem Akkord reiben.
+ * strong = Akkordton (Ruhepunkt), sonst Durchgangston (Spannung).
  */
-const MELODY_COLUMNS = 11;
+const MINOR = [0, 2, 3, 5, 7, 8, 10];
+const MELODY_COLUMNS = 12;
 export function melodyGrid(degreeIdx) {
-  const pcs = DEGREES[degreeIdx].tones;
+  const scale = degreeIdx === 4 ? MINOR.map((pc) => (pc === 10 ? 11 : pc)) : MINOR;
   const grid = [];
-  for (let s = 12; grid.length < MELODY_COLUMNS; s++) if (pcs.includes(s % 12)) grid.push(s);
+  for (let s = 12; grid.length < MELODY_COLUMNS; s++) if (scale.includes(s % 12)) grid.push(s);
   return grid;
+}
+export function chordTones(degreeIdx) {
+  return DEGREES[degreeIdx].tones.slice(0, 4);
 }
 
 /** Wie viele Akkordtöne: unten 3 (Dreiklang), Mitte 4, oben 5 */

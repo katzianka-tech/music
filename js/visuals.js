@@ -92,27 +92,72 @@ export class Visuals {
     return this.engine.labelFor(t.id, t.x / this.w);
   }
 
-  /** Spaltenraster im Tonleiter-Modus */
+  /**
+   * Spaltenraster: eine oder zwei Zonen (Geteilt-Modus). Akkordtöne hell, Durchgangstöne gedimmt,
+   * der gehaltene Akkord ist hinterlegt.
+   */
   guides(color, labelColor, font) {
-    const labels = this.engine.columnLabels();
-    if (!labels) return;
+    const zones = this.engine.layout();
+    this.labelStyle = zones ? { zones, labelColor, font } : null; // Beschriftung folgt in frame(), über allem
+    if (!zones) return;
     const g = this.g;
-    const n = labels.length;
-    const cw = this.w / n;
     g.save();
     g.strokeStyle = color;
     g.lineWidth = 1;
-    g.fillStyle = labelColor;
     g.font = font;
     g.textAlign = 'center';
-    for (let i = 0; i < n; i++) {
-      if (i > 0) {
+    for (const z of zones) {
+      const top = this.h * (1 - z.y1);
+      const bottom = this.h * (1 - z.y0);
+      const n = z.labels.length;
+      const cw = this.w / n;
+      if (z.active != null) {
+        g.fillStyle = color;
+        g.fillRect(z.active * cw, top, cw, bottom - top);
+      }
+      for (let i = 1; i < n; i++) {
         g.beginPath();
-        g.moveTo(i * cw, 0);
-        g.lineTo(i * cw, this.h);
+        g.moveTo(i * cw, top);
+        g.lineTo(i * cw, bottom);
         g.stroke();
       }
-      g.fillText(labels[i], i * cw + cw / 2, this.h - 18);
+
+      if (z.y1 < 1) {
+        // Trennlinie zwischen den Zonen
+        g.lineWidth = 2;
+        g.beginPath();
+        g.moveTo(0, top);
+        g.lineTo(this.w, top);
+        g.stroke();
+        g.lineWidth = 1;
+      }
+    }
+    g.restore();
+  }
+
+  /** Spaltenbeschriftung, zuletzt gezeichnet, damit Wellenformen sie nicht verdecken */
+  drawLabels() {
+    const st = this.labelStyle;
+    if (!st) return;
+    const g = this.g;
+    g.save();
+    g.textAlign = 'center';
+    for (const z of st.zones) {
+      const bottom = this.h * (1 - z.y0);
+      const n = z.labels.length;
+      const cw = this.w / n;
+      if (z.y0 > 0) {
+        // Beschriftung mitten im Bild: dunkler Streifen, damit sie lesbar bleibt
+        g.fillStyle = 'rgba(0,0,0,0.5)';
+        g.fillRect(0, bottom - 38, this.w, 30);
+      }
+      for (let i = 0; i < n; i++) {
+        const weak = z.strong && !z.strong[i];
+        g.globalAlpha = weak ? 0.45 : 1;
+        g.font = z.strong && !weak ? 'bold ' + st.font : st.font;
+        g.fillStyle = st.labelColor;
+        g.fillText(z.labels[i], i * cw + cw / 2, bottom - 18);
+      }
     }
     g.restore();
   }
@@ -123,8 +168,10 @@ export class Visuals {
     this.time += dt;
     const lvl = this.level();
     const theme = THEMES[this.engine.presetId];
+    this.labelStyle = null;
     theme.draw(this, dt, lvl);
-    if (this.engine.mode === 'chord') drawChord(this);
+    this.drawLabels();
+    if (this.engine.mode === 'chord' || this.engine.mode === 'split') drawChord(this);
     this.clearAll = false;
     this.flash = Math.max(0, this.flash - dt * 4);
     requestAnimationFrame((t) => this.frame(t));
@@ -241,7 +288,7 @@ const THEMES = {
         g.lineTo(v.w, y);
       }
       g.stroke();
-      v.guides('rgba(80,220,255,0.18)', 'rgba(150,235,255,0.6)', '12px ui-monospace, monospace');
+      v.guides('rgba(80,220,255,0.18)', 'rgba(170,240,255,0.9)', '12px ui-monospace, monospace');
       if (beat) drawSteps(v, beat);
       // digitale, gestufte Wellenform
       g.strokeStyle = '#7ff0ff';
