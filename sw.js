@@ -1,6 +1,6 @@
 // Service Worker: speichert die App, damit sie auch offline startet.
 // Bei Änderungen an den Dateien VERSION erhöhen, sonst sehen Nutzer die alte Version.
-const VERSION = 'klangfeld-v2';
+const VERSION = 'klangfeld-v3';
 const FILES = [
   './', 'index.html', 'css/style.css', 'js/app.js', 'js/engine.js', 'js/visuals.js', 'js/drums.js',
   'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png',
@@ -18,11 +18,14 @@ self.addEventListener('activate', (e) => {
   );
 });
 
-// Netzwerk zuerst (damit Updates sofort ankommen), Cache als Rückfall für offline
+// Netzwerk zuerst (damit Updates sofort ankommen), Cache als Rückfall für offline.
+// cache: 'no-cache' zwingt den Browser, beim Server nachzufragen, ob es eine neuere Version gibt,
+// statt bis zu 10 Minuten eine alte Kopie aus dem HTTP-Zwischenspeicher zu verwenden.
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
+  const sameOrigin = new URL(e.request.url).origin === location.origin;
   e.respondWith(
-    fetch(e.request)
+    fetch(e.request, sameOrigin ? { cache: 'no-cache' } : undefined)
       .then((res) => {
         const copy = res.clone();
         caches.open(VERSION).then((c) => c.put(e.request, copy));

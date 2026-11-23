@@ -134,7 +134,7 @@ document.addEventListener('visibilitychange', () => {
 
 // ---- Offline-Fähigkeit (PWA) ----
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => {});
 }
 
 // Zugriff für Fehlersuche in der Browser-Konsole
