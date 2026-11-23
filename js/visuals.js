@@ -1,7 +1,7 @@
 // Visualisierung: jede Klangfarbe hat ihren eigenen Look.
 // Gezeichnet wird auf ein Vollbild-Canvas, gespeist aus den Fingerpositionen und dem Audio-Analyser.
 
-import { SCALE_STEPS, noteName, xToSemis } from './engine.js';
+import { noteName } from './engine.js';
 
 const rand = (a, b) => a + Math.random() * (b - a);
 const MAX_PARTICLES = 350;
@@ -90,14 +90,15 @@ export class Visuals {
   }
 
   noteLabel(px) {
-    return noteName(xToSemis(px / this.w, this.engine.quantize));
+    return noteName(this.engine.semisFor(px / this.w));
   }
 
   /** Spaltenraster im Tonleiter-Modus */
   guides(color, labelColor, font) {
-    if (!this.engine.quantize) return;
+    const grid = this.engine.grid();
+    if (!grid) return;
     const g = this.g;
-    const n = SCALE_STEPS.length;
+    const n = grid.length;
     const cw = this.w / n;
     g.save();
     g.strokeStyle = color;
@@ -112,7 +113,7 @@ export class Visuals {
         g.lineTo(i * cw, this.h);
         g.stroke();
       }
-      g.fillText(noteName(SCALE_STEPS[i]).replace(/\d/, ''), i * cw + cw / 2, this.h - 18);
+      g.fillText(noteName(grid[i]).replace(/\d/, ''), i * cw + cw / 2, this.h - 18);
     }
     g.restore();
   }
@@ -147,6 +148,28 @@ function wavePath(v, { yMid, amp, step = 4, shape = (s) => s, stepped = false })
     } else g.lineTo(x, y);
     prevY = y;
   }
+}
+
+// Aktueller und nächster Akkord, kurzes Aufleuchten beim Wechsel
+function drawChord(v) {
+  const g = v.g;
+  const e = v.engine;
+  const glow = Math.exp(-(performance.now() - e.chordChangedAt) / 250);
+  const y = 150;
+  g.save();
+  g.textAlign = 'center';
+  g.font = 'bold 44px ui-monospace, monospace';
+  g.shadowColor = '#7ff0ff';
+  g.shadowBlur = 8 + glow * 30;
+  g.fillStyle = `rgba(255,255,255,${0.75 + glow * 0.25})`;
+  g.fillText(e.chord, v.w / 2, y);
+  g.shadowBlur = 0;
+  if (e.nextChord) {
+    g.font = '14px ui-monospace, monospace';
+    g.fillStyle = 'rgba(127,240,255,0.6)';
+    g.fillText('nächster: ' + e.nextChord, v.w / 2, y + 24);
+  }
+  g.restore();
 }
 
 // Lauflicht-Leiste des Drumcomputers: 16 Schritte, Kick rot, Snare weiss, Rest cyan
@@ -213,6 +236,7 @@ const THEMES = {
       g.stroke();
       v.guides('rgba(80,220,255,0.18)', 'rgba(150,235,255,0.6)', '12px ui-monospace, monospace');
       if (beat) drawSteps(v, beat);
+      if (v.engine.chord) drawChord(v);
       // digitale, gestufte Wellenform
       g.strokeStyle = '#7ff0ff';
       g.lineWidth = 2;

@@ -26,6 +26,11 @@ die Dichte wandert langsam, alle 8 Takte gibt es ein Fill und gelegentlich einen
 Kick auf 1 und 3 sowie Snare auf 2 und 4 bleiben als Gerüst immer stehen.
 Tempo umschaltbar: 100, 116 oder 132 BPM. Die Leiste unten zeigt die 16 Schritte.
 
+**Akkordfolge:** Solange der Beat läuft und "Tonleiter" aktiv ist, rasten die Fingertöne auf die Töne
+des aktuellen Akkords ein (9 Spalten, A-Moll, Septakkorde). Der Akkord wechselt jeden Takt, alle 16 Takte
+wird eine andere bewährte Folge gewählt (z. B. Am7 – Fmaj7 – Cmaj7 – G7). Gehaltene Töne gleiten beim
+Wechsel auf den passenden Akkordton. Oben steht der aktuelle und der nächste Akkord.
+
 Alle Klänge werden live mit der Web Audio API erzeugt. Es gibt keine Samples und damit keine Lizenzfragen.
 
 ## Lokal starten
@@ -47,6 +52,7 @@ Hinweis: Die Installation als App (PWA) und der Offline-Modus funktionieren nur 
 ## Aufbau
 
 - `js/engine.js` – Klangmaschine und die vier Klangfarben
+- `js/harmony.js` – Akkorde und Akkordfolgen
 - `js/drums.js` – generativer Drumcomputer (Robotik)
 - `js/visuals.js` – Visualisierung, ein Theme pro Klangfarbe
 - `js/app.js` – Bedienung, Multitouch, Einstellungen

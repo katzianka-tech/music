@@ -153,6 +153,7 @@ export class DrumMachine {
 
   newBar() {
     this.bar++;
+    this.onBar?.(this.bar, this.nextTime);
     // Dichte wandert langsam (alle 4 Takte)
     if (this.bar % 4 === 0) this.density = Math.min(1, Math.max(0.15, this.density + rand(-0.25, 0.25)));
     // Ein Teil der Schritte wird neu gewürfelt: das Muster entwickelt sich, bleibt aber wiedererkennbar

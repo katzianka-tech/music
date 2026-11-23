@@ -1,12 +1,21 @@
 import { Engine, PRESETS } from './engine.js';
 import { Visuals } from './visuals.js';
 import { DrumMachine } from './drums.js';
+import { Harmony } from './harmony.js';
 
 const engine = new Engine();
 const canvas = document.getElementById('stage');
 const visuals = new Visuals(canvas, engine);
 const drums = new DrumMachine(engine);
 visuals.drums = drums;
+const harmony = new Harmony();
+
+// Akkordwechsel exakt zum Taktbeginn (der Drumcomputer plant ~120 ms voraus)
+drums.onBar = (bar, time) => {
+  const c = harmony.chordForBar(bar);
+  const delay = Math.max(0, (time - engine.ctx.currentTime) * 1000);
+  setTimeout(() => drums.running && engine.setChord(c.now, c.next), delay);
+};
 const startEl = document.getElementById('start');
 const presetsEl = document.getElementById('presets');
 const modeBtn = document.getElementById('mode');
@@ -55,7 +64,11 @@ function selectPreset(id) {
 // ---- Beat (Robotik) ----
 function setBeat(on) {
   if (on) drums.start();
-  else drums.stop();
+  else {
+    drums.stop();
+    harmony.reset();
+    if (engine.chord) engine.setChord(null);
+  }
   beatBtn.setAttribute('aria-pressed', drums.running);
   beatBtn.textContent = drums.running ? 'Beat ■' : 'Beat ▶';
 }

@@ -1,6 +1,8 @@
 // Klangmaschine: vier synthetische Klangfarben, gesteuert über Position (x = Tonhöhe, y = Klangfarbe).
 // Alles wird live mit der Web Audio API erzeugt, es gibt keine Samples.
 
+import { chordGrid } from './harmony.js';
+
 // ---------- Tonhöhe ----------
 
 const ROOT = 110; // A2
@@ -374,6 +376,29 @@ export class Engine {
     this.quantize = true;
     this.voices = new Map();
     this.bus = null;
+    this.chord = null; // aktueller Akkord (nur solange der Beat läuft)
+    this.nextChord = null;
+    this.chordChangedAt = 0;
+  }
+
+  /** Spaltenraster der Halbtöne: Akkordtöne, Pentatonik oder null (frei) */
+  grid() {
+    if (!this.quantize) return null;
+    return this.chord ? chordGrid(this.chord) : SCALE_STEPS;
+  }
+
+  semisFor(x) {
+    const g = this.grid();
+    if (!g) return xToSemis(x, false);
+    return g[Math.floor(Math.min(Math.max(x, 0), 0.9999) * g.length)];
+  }
+
+  /** Akkordwechsel: gehaltene Töne gleiten auf den passenden Ton des neuen Akkords */
+  setChord(name, next = null) {
+    this.chord = name;
+    this.nextChord = next;
+    this.chordChangedAt = performance.now();
+    for (const v of this.voices.values()) v.move(this.freqFor(v.x), v.y, 0.03);
   }
 
   async start() {
@@ -411,19 +436,25 @@ export class Engine {
   }
 
   freqFor(x) {
-    return semisToFreq(xToSemis(x, this.quantize));
+    return semisToFreq(this.semisFor(x));
   }
 
   noteOn(id, x, y) {
     if (!this.ctx || this.voices.size >= MAX_VOICES) return;
     const v = PRESETS[this.presetId].voice(this.ctx, this.bus, this.freqFor(x), y);
+    v.x = x;
+    v.y = y;
     this.voices.set(id, v);
     this.bus.activity?.(this.voices.size);
   }
 
   noteMove(id, x, y) {
     // Frei: Ton folgt dem Finger direkt. Tonleiter: kurzes Gleiten zum nächsten Ton.
-    this.voices.get(id)?.move(this.freqFor(x), y, this.quantize ? 0.02 : 0.008);
+    const v = this.voices.get(id);
+    if (!v) return;
+    v.x = x;
+    v.y = y;
+    v.move(this.freqFor(x), y, this.quantize ? 0.02 : 0.008);
   }
 
   noteOff(id) {
