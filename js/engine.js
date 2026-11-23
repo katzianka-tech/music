@@ -1,7 +1,7 @@
 // Klangmaschine: vier synthetische Klangfarben, gesteuert über Position (x = Tonhöhe, y = Klangfarbe).
 // Alles wird live mit der Web Audio API erzeugt, es gibt keine Samples.
 
-import { DEGREES, degreeFor, degreeIndex, complexityFor, voiceChord } from './harmony.js';
+import { DEGREES, degreeIndex, complexityFor, voiceChord, melodyGrid } from './harmony.js';
 
 // ---------- Tonhöhe ----------
 
@@ -369,7 +369,6 @@ export const PRESETS = {
 // ---------- Engine ----------
 
 const MAX_VOICES = 6;
-const MAX_CHORDS = 2;
 export const MODES = ['scale', 'chord', 'free'];
 
 /** Ein Finger im Akkord-Modus: mehrere Stimmen, die gemeinsam gesteuert werden */
@@ -408,6 +407,7 @@ class ChordVoice {
       this.name = ch.name;
       this.notes = ch.notes;
       this.engine.rememberChord(this);
+      this.engine.retuneMelody();
     }
     this.voices.forEach((v, i) => v.move(semisToFreq(this.notes[i]), y, 0.035));
   }
@@ -439,10 +439,37 @@ export class Engine {
     this.lastChord = { name: cv.name, notes: cv.notes, time: performance.now() };
   }
 
+  /** Der gerade gehaltene Akkord (im Akkord-Modus höchstens einer) */
+  heldChord() {
+    for (const v of this.voices.values()) if (v.isChord) return v;
+    return null;
+  }
+
+  /** Melodieton für Position x über dem gehaltenen Akkord */
+  melodySemis(x, chord = this.heldChord()) {
+    const g = melodyGrid(chord.degree);
+    return g[Math.floor(Math.min(Math.max(x, 0), 0.9999) * g.length)];
+  }
+
+  /** Akkord gewechselt: gehaltene Melodietöne gleiten auf den nächsten passenden Ton */
+  retuneMelody() {
+    const chord = this.heldChord();
+    if (!chord) return;
+    for (const v of this.voices.values()) {
+      if (!v.isMelody) continue;
+      v.semis = this.melodySemis(v.x, chord);
+      v.move(semisToFreq(v.semis), v.y, 0.035);
+    }
+  }
+
   /** Beschriftung der Spalten (oder null im Frei-Modus) */
   columnLabels() {
     if (this.mode === 'free') return null;
-    if (this.mode === 'chord') return DEGREES.map((d) => d.names[0]);
+    if (this.mode === 'chord') {
+      const chord = this.heldChord();
+      if (chord) return melodyGrid(chord.degree).map((s) => noteName(s).replace(/\d/, ''));
+      return DEGREES.map((d) => d.names[0]);
+    }
     return SCALE_STEPS.map((s) => noteName(s).replace(/\d/, ''));
   }
 
@@ -454,6 +481,7 @@ export class Engine {
   labelFor(id, x) {
     const v = this.voices.get(id);
     if (v?.isChord) return v.name;
+    if (v?.isMelody) return noteName(v.semis);
     return noteName(this.semisFor(x));
   }
 
@@ -500,8 +528,15 @@ export class Engine {
     if (!this.ctx) return;
     let v;
     if (this.mode === 'chord') {
-      if ([...this.voices.values()].filter((v) => v.isChord).length >= MAX_CHORDS) return;
-      v = new ChordVoice(this, x, y);
+      const chord = this.heldChord();
+      if (!chord) v = new ChordVoice(this, x, y);
+      else {
+        // Akkord wird gehalten: dieser Finger spielt Melodie
+        if (this.voices.size >= MAX_VOICES) return;
+        const semis = this.melodySemis(x, chord);
+        v = PRESETS[this.presetId].voice(this.ctx, this.bus, semisToFreq(semis), y, 0.85);
+        Object.assign(v, { x, y, semis, isMelody: true });
+      }
     } else {
       if (this.voices.size >= MAX_VOICES) return;
       v = PRESETS[this.presetId].voice(this.ctx, this.bus, this.freqFor(x), y);
@@ -516,6 +551,13 @@ export class Engine {
     const v = this.voices.get(id);
     if (!v) return;
     if (v.isChord) return v.update(x, y);
+    if (v.isMelody) {
+      v.x = x;
+      v.y = y;
+      const chord = this.heldChord();
+      if (chord) v.semis = this.melodySemis(x, chord); // ohne Akkord bleibt der Ton stehen
+      return v.move(semisToFreq(v.semis), y, 0.02);
+    }
     // Frei: Ton folgt dem Finger direkt. Tonleiter: kurzes Gleiten zum nächsten Ton.
     v.x = x;
     v.y = y;

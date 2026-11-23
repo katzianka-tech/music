@@ -1,6 +1,6 @@
 // Service Worker: speichert die App, damit sie auch offline startet.
 // Bei Änderungen an den Dateien VERSION erhöhen, sonst sehen Nutzer die alte Version.
-const VERSION = 'klangfeld-v5';
+const VERSION = 'klangfeld-v6';
 const FILES = [
   './', 'index.html', 'css/style.css', 'js/app.js', 'js/engine.js', 'js/visuals.js', 'js/drums.js', 'js/harmony.js',
   'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png',

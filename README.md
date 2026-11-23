@@ -42,7 +42,10 @@ Jeder Fingertipp spielt einen Akkord, der nächste schliesst musikalisch an den 
 - **Übergang:** Die Töne gleiten ganz kurz aus dem vorherigen Akkord in den neuen.
 - **Industrial** spielt nur Power-Chords (Grundton und Oktave), weil volle Akkorde mit starker
   Verzerrung matschig klingen.
-- Höchstens zwei Akkorde gleichzeitig.
+- **Melodie dazu:** Solange ein Akkord gehalten wird, spielen alle weiteren Finger Melodietöne.
+  Das Raster zeigt dann die fünf Töne der schillerndsten Form des Akkords über zwei Oktaven
+  (bei Am: A H C E G). Wechselt der Akkord, gleiten gehaltene Melodietöne auf den nächsten passenden Ton.
+  Wird der Akkord losgelassen, ist der nächste Finger wieder ein Akkord.
 
 Alle Klänge werden live mit der Web Audio API erzeugt. Es gibt keine Samples und damit keine Lizenzfragen.
 

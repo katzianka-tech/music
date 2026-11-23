@@ -22,6 +22,18 @@ const CENTER = 19; // bevorzugte Mitte (E4)
 export const degreeFor = (x) => DEGREES[Math.floor(Math.min(Math.max(x, 0), 0.9999) * DEGREES.length)];
 export const degreeIndex = (x) => Math.floor(Math.min(Math.max(x, 0), 0.9999) * DEGREES.length);
 
+/**
+ * Melodietöne über einem gehaltenen Akkord: die fünf Töne seiner schillerndsten Form
+ * (z. B. Am9: A C E G H), ab A3 aufwärts. Passen deshalb immer zum Akkord.
+ */
+const MELODY_COLUMNS = 11;
+export function melodyGrid(degreeIdx) {
+  const pcs = DEGREES[degreeIdx].tones;
+  const grid = [];
+  for (let s = 12; grid.length < MELODY_COLUMNS; s++) if (pcs.includes(s % 12)) grid.push(s);
+  return grid;
+}
+
 /** Wie viele Akkordtöne: unten 3 (Dreiklang), Mitte 4, oben 5 */
 export const complexityFor = (y) => 3 + (y > 0.35) + (y > 0.7);
 

@@ -74,7 +74,7 @@ setTempo(TEMPI.includes(+store.get('bpm')) ? +store.get('bpm') : 116);
 // ---- Modus: Tonleiter → Akkorde → Frei ----
 const MODE_LABELS = { scale: 'Tonleiter', chord: 'Akkorde', free: 'Frei' };
 function updateHint() {
-  hintEl.textContent = engine.mode === 'chord' ? 'Akkorde: unten schlicht, oben schillernd' : PRESETS[engine.presetId].hint;
+  hintEl.textContent = engine.mode === 'chord' ? '1. Finger Akkord, weitere Melodie' : PRESETS[engine.presetId].hint;
 }
 function setMode(m) {
   engine.releaseAll();
